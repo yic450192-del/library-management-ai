@@ -35,14 +35,17 @@ Agent 起草 + 人类审查、`ai-usage-log` 全程留痕。
 
 ## 三、如何查看 UML
 
-`.puml` 文件用 PlantUML 渲染：
+渲染好的 PNG 已在 `docs/uml/`，可直接插进实验报告。
+
+要重新生成：
 
 ```bash
-java -jar plantuml.jar specs/*.puml
+bash tools/render-uml.sh
 ```
 
-在 VS Code 安装 PlantUML 插件可直接预览。**类图与包图需要 Graphviz**（`dot -V` 验证），
-用例图与顺序图不需要。
+依赖 JDK 17 + Graphviz + 仓库内自带的 `tools/plantuml.jar`，输出到 `docs/uml/`。
+**类图与包图需要 Graphviz**（`dot -V` 验证），用例图与顺序图不需要。
+装 Graphviz 见 `docs/Graphviz安装流程.md`。
 
 ## 四、src 下的 Java 代码是什么
 

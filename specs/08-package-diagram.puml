@@ -7,23 +7,17 @@ skinparam packageStyle rectangle
 skinparam linetype ortho
 
 package "presentation（表现层 · MVC 的 C）" as presentation #E6F1FB {
-  package "controller" as controller {
-    class BorrowController
-    class ReturnController
-    class ReservationController
-    class CatalogController
-    class AdminController
-  }
-  package "advice" as advice {
-    class GlobalExceptionHandler
-    class RequireRoleAspect
-  }
-  package "dto" as dto {
-    class BorrowRequest
-    class BorrowResponse
-    class LoanResponse
-    class ReservationResponse
-  }
+  class BorrowController
+  class ReturnController
+  class ReservationController
+  class CatalogController
+  class AdminController
+  class GlobalExceptionHandler
+  class RequireRoleAspect
+  class BorrowRequest
+  class BorrowResponse
+  class LoanResponse
+  class ReservationResponse
 }
 
 package "application（应用服务层 · 用例编排与事务边界）" as application #EEEDFE {
@@ -37,6 +31,8 @@ package "application（应用服务层 · 用例编排与事务边界）" as app
 package "domain（领域层 · MVC 的 M）" as domain #E1F5EE {
   package "reader" as reader {
     class Reader
+    class StudentReader
+    class TeacherReader
   }
   package "card" as card {
     class BorrowCard
@@ -44,6 +40,9 @@ package "domain（领域层 · MVC 的 M）" as domain #E1F5EE {
   package "catalog" as catalog {
     class BookTitle
     class LibraryItem
+    class Book
+    class Magazine
+    class Thesis
   }
   package "circulation" as circulation {
     class Loan
@@ -62,13 +61,14 @@ package "domain（领域层 · MVC 的 M）" as domain #E1F5EE {
     class Librarian
     class SystemAdmin
   }
-  package "repository（接口）" as repo_if {
+  package "repository（接口，依赖倒置的关键）" as repo_if {
     interface ReaderRepository
     interface BorrowCardRepository
     interface LibraryItemRepository
     interface LoanRepository
     interface ReservationRepository
-    interface FineRepository
+    interface BorrowPolicyRepository
+    interface FineRuleRepository
   }
 }
 
@@ -79,9 +79,10 @@ package "infrastructure（基础设施层）" as infrastructure #FAEEDA {
     class JpaLibraryItemRepository
     class JpaLoanRepository
     class JpaReservationRepository
-    class JpaFineRepository
+    class JpaBorrowPolicyRepository
+    class JpaFineRuleRepository
   }
-  package "entity" as entity {
+  package "entity（持久化对象）" as entity {
     class ReaderPO
     class LoanPO
     class LibraryItemPO

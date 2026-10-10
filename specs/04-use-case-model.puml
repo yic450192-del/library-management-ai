@@ -5,6 +5,8 @@
 left to right direction
 skinparam actorStyle awesome
 skinparam packageStyle rectangle
+skinparam nodesep 6
+skinparam ranksep 25
 
 ' ===== 参与者 =====
 actor "读者\n(Reader)" as Reader

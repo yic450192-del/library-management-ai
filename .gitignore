@@ -1,5 +1,7 @@
 target/
 !.mvn/wrapper/maven-wrapper.jar
+# 图表中间产物（PNG 保留，便于直接插报告）；PlantUML 生成的临时文件忽略
+*.puml.tmp
 .idea/
 *.iml
 *.iws
