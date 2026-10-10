@@ -1,0 +1,126 @@
+@startuml
+' 08 包图 —— 指导书步骤 3：分层架构 + MVC，用包图表达架构
+' 红线：Controller 不得直接依赖 Repository
+' 渲染：java -jar plantuml.jar specs/08-package-diagram.puml
+
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+package "presentation（表现层 · MVC 的 C）" as presentation #E6F1FB {
+  package "controller" as controller {
+    class BorrowController
+    class ReturnController
+    class ReservationController
+    class CatalogController
+    class AdminController
+  }
+  package "advice" as advice {
+    class GlobalExceptionHandler
+    class RequireRoleAspect
+  }
+  package "dto" as dto {
+    class BorrowRequest
+    class BorrowResponse
+    class LoanResponse
+    class ReservationResponse
+  }
+}
+
+package "application（应用服务层 · 用例编排与事务边界）" as application #EEEDFE {
+  class CirculationApplicationService
+  class ReservationApplicationService
+  class CatalogApplicationService
+  class AdminApplicationService
+  class ReaderApplicationService
+}
+
+package "domain（领域层 · MVC 的 M）" as domain #E1F5EE {
+  package "reader" as reader {
+    class Reader
+  }
+  package "card" as card {
+    class BorrowCard
+  }
+  package "catalog" as catalog {
+    class BookTitle
+    class LibraryItem
+  }
+  package "circulation" as circulation {
+    class Loan
+    class CirculationService
+  }
+  package "reservation" as reservation {
+    class Reservation
+  }
+  package "fine" as fine {
+    class FineRule
+    class FineRecord
+    class FineCalculator
+  }
+  package "admin" as admin {
+    class BorrowPolicy
+    class Librarian
+    class SystemAdmin
+  }
+  package "repository（接口）" as repo_if {
+    interface ReaderRepository
+    interface BorrowCardRepository
+    interface LibraryItemRepository
+    interface LoanRepository
+    interface ReservationRepository
+    interface FineRepository
+  }
+}
+
+package "infrastructure（基础设施层）" as infrastructure #FAEEDA {
+  package "persistence.jpa" as jpa {
+    class JpaReaderRepository
+    class JpaBorrowCardRepository
+    class JpaLibraryItemRepository
+    class JpaLoanRepository
+    class JpaReservationRepository
+    class JpaFineRepository
+  }
+  package "entity" as entity {
+    class ReaderPO
+    class LoanPO
+    class LibraryItemPO
+  }
+}
+
+package "test（测试层）" as test #F1EFE8 {
+  class CirculationServiceTest
+  class FineCalculatorTest
+  class BorrowApiTest
+}
+
+' ===== 依赖方向：单向向下 =====
+presentation ..> application : 依赖（只走 Service）
+presentation ..> dto : 依赖
+controller ..> advice : 使用
+
+application ..> domain : 依赖
+application ..> repo_if : 依赖接口
+
+domain ..> repo_if : 定义接口
+infrastructure ..> repo_if : 实现接口
+jpa ..> entity : 映射
+
+test ..> presentation : MockMvc
+test ..> domain : 单元测试
+
+' ===== 禁止的依赖（用注释说明，不画线） =====
+note as N1
+  <b>禁止：</b>controller 直接依赖
+  repository / jpa / entity。
+  必须经 application service。
+end note
+
+note as N2
+  领域层不依赖 Spring、
+  不依赖持久化框架（NFR-003）。
+  repository 接口定义在领域层，
+  实现放在基础设施层。
+end note
+
+@enduml

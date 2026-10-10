@@ -1,0 +1,92 @@
+@startuml
+' 04 用例模型 —— 指导书步骤 1
+' 渲染：java -jar plantuml.jar specs/04-use-case-model.puml
+
+left to right direction
+skinparam actorStyle awesome
+skinparam packageStyle rectangle
+
+' ===== 参与者 =====
+actor "读者\n(Reader)" as Reader
+actor "学生读者\n(Student)" as Student
+actor "教师读者\n(Teacher)" as Teacher
+actor "图书管理员\n(Librarian)" as Librarian
+actor "系统管理员\n(SystemAdmin)" as SystemAdmin
+
+Reader <|-- Student
+Reader <|-- Teacher
+
+' ===== 读者用例 =====
+rectangle "读者域" {
+  usecase "UC-001 注册读者账号" as UC001
+  usecase "UC-002 查询图书" as UC002
+  usecase "UC-003 预约图书" as UC003
+  usecase "UC-004 取消预约" as UC004
+  usecase "UC-005 查询我的借阅信息" as UC005
+}
+
+' ===== 图书管理员用例 =====
+rectangle "流通域" {
+  usecase "UC-101 办理借书" as UC101
+  usecase "UC-102 办理还书" as UC102
+  usecase "UC-103 查询读者借阅信息" as UC103
+}
+
+' ===== 系统管理员用例 =====
+rectangle "系统维护域" {
+  usecase "UC-201 办理借阅证" as UC201
+  usecase "UC-202 删除借阅证" as UC202
+  usecase "UC-203 添加图书管理员" as UC203
+  usecase "UC-204 删除图书管理员" as UC204
+  usecase "UC-205 添加馆藏副本" as UC205
+  usecase "UC-206 删除馆藏副本" as UC206
+  usecase "UC-207 添加标题信息" as UC207
+  usecase "UC-208 删除标题信息" as UC208
+  usecase "UC-209 维护借阅与罚款规则" as UC209
+}
+
+' ===== 公共用例 =====
+usecase "UC-901 验证借阅证" as UC901
+usecase "UC-902 检查借阅规则" as UC902
+usecase "UC-903 计算超期罚款" as UC903
+
+' ===== 参与者关联 =====
+Student --> UC001
+Teacher --> UC001
+Reader --> UC002
+Reader --> UC003
+Reader --> UC004
+Reader --> UC005
+
+Librarian --> UC101
+Librarian --> UC102
+Librarian --> UC103
+
+SystemAdmin --> UC201
+SystemAdmin --> UC202
+SystemAdmin --> UC203
+SystemAdmin --> UC204
+SystemAdmin --> UC205
+SystemAdmin --> UC206
+SystemAdmin --> UC207
+SystemAdmin --> UC208
+SystemAdmin --> UC209
+
+' ===== 用例关系 =====
+UC101 ..> UC901 : <<include>>
+UC101 ..> UC902 : <<include>>
+UC102 ..> UC903 : <<extend>>
+UC003 ..> UC002 : <<include>>
+
+note right of UC902
+  读者类型差异（专科/本科/硕士/博士/教师）
+  由 BorrowPolicy 处理，
+  不单独立用例
+end note
+
+note bottom of UC101
+  指导书原文：借书必须由
+  图书管理员代理完成
+end note
+
+@enduml

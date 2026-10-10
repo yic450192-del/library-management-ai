@@ -1,0 +1,107 @@
+@startuml
+' 11 顺序图：办理还书（UC-102） —— 指导书步骤 4
+' 渲染：java -jar plantuml.jar specs/11-sequence-return-book.puml
+
+autonumber
+skinparam maxMessageSize 120
+
+actor    "图书管理员"            as Librarian
+participant "ReturnController"    as Ctrl      <<presentation>>
+participant "RequireRoleAspect"   as Aspect    <<presentation>>
+participant "CirculationApplicationService" as AppSvc <<application>>
+participant "CirculationService"  as Domain    <<domain>>
+participant "LibraryItemRepository" as ItemRepo <<domain.repository>>
+participant "LoanRepository"      as LoanRepo  <<domain.repository>>
+participant "FineCalculator"      as Calc      <<domain service>>
+participant "FineRuleRepository"  as RuleRepo  <<domain.repository>>
+
+== 1. 鉴权 ==
+
+Librarian -> Ctrl : POST /api/loans/return\n{barcode}\nX-Operator-Role=LIBRARIAN
+Ctrl -> Aspect : 校验操作人角色
+Aspect -->> Ctrl : 通过
+
+note right of Ctrl
+  指导书原文：还书时学生只需
+  把图书交给管理员，管理员
+  输入图书信息 —— 因此还书
+  不需要借阅证
+end note
+
+== 2. 进入应用服务（事务边界） ==
+
+Ctrl -> AppSvc : returnItem(request, operator)
+activate AppSvc
+AppSvc -> Domain : returnItem(barcode, librarianId, today)
+activate Domain
+
+== 3. 验证本馆藏书（BR-008） ==
+
+Domain -> ItemRepo : findByBarcode(barcode)
+activate ItemRepo
+ItemRepo -->> Domain : LibraryItem
+deactivate ItemRepo
+
+alt 条码不属于本馆
+    Domain -->> AppSvc : throw ItemNotOwnedException
+    AppSvc -->> Ctrl : 404 非本馆藏书
+    Ctrl -->> Librarian : 提示"非本馆藏书，无法办理归还"
+else 副本状态为"在馆"（无在借记录）
+    Domain -->> AppSvc : throw LoanNotFoundException
+    AppSvc -->> Ctrl : 409 该副本未借出
+    Ctrl -->> Librarian : 提示"该副本当前未借出"
+else 是本馆藏书且在借
+    == 4. 定位在借记录 ==
+    Domain -> LoanRepo : findActiveByItemId(itemId)
+    activate LoanRepo
+    LoanRepo -->> Domain : Loan{borrowDate, dueDate, status}
+    deactivate LoanRepo
+
+    == 5. 判定是否超期（UC-903：扩展点） ==
+    Domain -> Domain : overdue = loan.isOverdue(today)
+
+    alt 未超期
+        Domain -> Domain : 跳过罚款计算
+    else 已超期
+        Domain -> Calc : calculateAndCreate(loan, today)
+        activate Calc
+        Calc -> RuleRepo : findByItemType(item.itemType)
+        activate RuleRepo
+        RuleRepo -->> Calc : FineRule{graceDays, dailyRate, maxAmount}
+        deactivate RuleRepo
+        Calc -> Calc : overdueDays = today - dueDate - graceDays
+        Calc -> Calc : amount = min(overdueDays x dailyRate, maxAmount)   '' BR-009
+        Calc -->> Domain : FineRecord{amount, status=UNPAID}
+        deactivate Calc
+    end
+
+    == 6. 结清借阅信息并更新副本与账户 ==
+    Domain -> Domain : loan.markReturned(today)
+    Domain -> Domain : item.markReturned()
+    Domain -> LoanRepo : save(loan)
+    activate LoanRepo
+    LoanRepo -->> Domain : Loan（已持久化）
+    deactivate LoanRepo
+    Domain -> ItemRepo : save(item)
+    activate ItemRepo
+    ItemRepo -->> Domain : LibraryItem（状态 IN_LIBRARY）
+    deactivate ItemRepo
+
+    == 7. 检查该读者是否还有超期未还图书 ==
+    Domain -> LoanRepo : findActiveByReaderId(readerId)
+    activate LoanRepo
+    LoanRepo -->> Domain : List<Loan>
+    deactivate LoanRepo
+    Domain -->> AppSvc : Loan + FineRecord + 其余超期清单
+end
+
+deactivate Domain
+
+== 8. 装配响应 ==
+
+AppSvc -> AppSvc : 组装 ReturnResponse
+AppSvc -->> Ctrl : ReturnResponse{loanId, returned=true, fineAmount}
+deactivate AppSvc
+Ctrl -->> Librarian : 200 还书成功；若超期显示罚款金额与其余超期书目
+
+@enduml

@@ -1,0 +1,252 @@
+@startuml
+' 09b 设计类图（第二步）—— 指导书步骤 4
+' 在分析类图基础上加入界面类（Spring MVC）与持久化类，得到更精确的设计
+' 渲染：java -jar plantuml.jar specs/09b-design-class-diagram.puml
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+' ================= 表现层 =================
+package "presentation" {
+  class BorrowController <<@RestController>> {
+    - circulationAppService : CirculationApplicationService
+    + borrow(BorrowRequest, Operator) : ResponseEntity<BorrowResponse>
+  }
+  class ReturnController <<@RestController>> {
+    - circulationAppService : CirculationApplicationService
+    + returnItem(ReturnRequest, Operator) : ResponseEntity<ReturnResponse>
+  }
+  class ReservationController <<@RestController>> {
+    - reservationAppService : ReservationApplicationService
+    + reserve(ReserveRequest, Operator) : ResponseEntity<ReservationResponse>
+  }
+  class GlobalExceptionHandler <<@RestControllerAdvice>> {
+    + handleBusinessException(e) : ResponseEntity<ErrorBody>
+    + handleNotFound(e) : ResponseEntity<ErrorBody>
+  }
+  class RequireRoleAspect <<@Aspect>> {
+    + checkRole(pjp) : Object
+  }
+  class BorrowRequest <<DTO>> {
+    + cardNo : String
+    + barcode : String
+  }
+  class BorrowResponse <<DTO>> {
+    + loanId : Long
+    + bookTitle : String
+    + dueDate : LocalDate
+  }
+  class ReturnResponse <<DTO>> {
+    + loanId : Long
+    + returned : boolean
+    + fineAmount : BigDecimal
+  }
+  class ReservationResponse <<DTO>> {
+    + reservationId : Long
+    + queuePosition : int
+  }
+  class ErrorBody <<DTO>> {
+    + code : int
+    + message : String
+  }
+}
+
+' ================= 应用服务层 =================
+package "application" {
+  class CirculationApplicationService <<@Service>> {
+    - circulationService : CirculationService
+    - loanRepository : LoanRepository
+    - loanMapper : LoanMapper
+    + borrow(req, operator) : BorrowResponse  <<@Transactional>>
+    + returnItem(req, operator) : ReturnResponse  <<@Transactional>>
+  }
+  class ReservationApplicationService <<@Service>> {
+    - bookTitleRepository : BookTitleRepository
+    - reservationRepository : ReservationRepository
+    + reserve(req, operator) : ReservationResponse  <<@Transactional>>
+    + cancel(reservationId, operator) : void  <<@Transactional>>
+  }
+  class LoanMapper <<Mapper>> {
+    + toResponse(loan) : BorrowResponse
+    + toEntity(po) : Loan
+    + toPo(loan) : LoanPO
+  }
+}
+
+' ================= 领域层 =================
+package "domain" {
+  class CirculationService <<Domain Service>> {
+    + borrow(cardNo, barcode, librarianId, today) : Loan
+    + returnItem(barcode, librarianId, today) : Loan
+  }
+  class FineCalculator <<Domain Service>> {
+    + calculateAndCreate(loan, today) : FineRecord
+  }
+  class ReaderFactory <<Factory>> {
+    + create(type, name, dept) : Reader
+  }
+  class LibraryItemFactory <<Factory>> {
+    + create(itemType, barcode) : LibraryItem
+  }
+  class Reader <<abstract Entity>> {
+    + hasOverdueLoan() : boolean
+    + activeLoanCount() : int
+  }
+  class StudentReader <<Entity>>
+  class TeacherReader <<Entity>>
+  class BorrowCard <<Entity>> {
+    + isValid() : boolean
+  }
+  class LibraryItem <<abstract Entity>> {
+    + isAvailable() : boolean
+    + markOnLoan() : void
+    + markReturned() : void
+  }
+  class Book <<Entity>>
+  class Magazine <<Entity>>
+  class Thesis <<Entity>>
+  class BookTitle <<Entity>> {
+    + availableCopyCount() : int
+  }
+  class Loan <<Entity>> {
+    + isOverdue(today) : boolean
+    + overdueDays(today) : int
+    + markReturned(date) : void
+  }
+  class Reservation <<Entity>> {
+    + isExpired(today) : boolean
+    + ready() : void
+    + expire() : void
+  }
+  class FineRecord <<Entity>>
+  class BorrowPolicy <<Policy>> {
+    + checkQuota(activeCount) : boolean
+    + calculateDueDate(borrowDate) : LocalDate
+  }
+  class FineRule <<Policy>> {
+    + calculate(overdueDays) : Money
+  }
+  class Money <<Value Object>>
+  class BorrowPeriod <<Value Object>>
+}
+
+' ================= 领域层 Repository 接口 =================
+package "domain.repository（接口）" {
+  interface LoanRepository {
+    + findActiveByReaderId(id) : List<Loan>
+    + findActiveByItemId(id) : Optional<Loan>
+    + save(loan) : Loan
+  }
+  interface BorrowCardRepository {
+    + findByCardNo(cardNo) : Optional<BorrowCard>
+  }
+  interface LibraryItemRepository {
+    + findByBarcode(barcode) : Optional<LibraryItem>
+    + save(item) : LibraryItem
+  }
+  interface ReservationRepository {
+    + countByTitleId(titleId) : int
+    + save(r) : Reservation
+  }
+  interface BorrowPolicyRepository {
+    + findByReaderType(type) : BorrowPolicy
+  }
+  interface FineRuleRepository {
+    + findByItemType(type) : FineRule
+  }
+}
+
+' ================= 基础设施层 =================
+package "infrastructure.persistence" {
+  class JpaLoanRepository <<实现>> {
+    + findActiveByReaderId(id) : List<Loan>
+  }
+  class JpaLibraryItemRepository <<实现>>
+  class JpaReservationRepository <<实现>>
+  class LoanPO <<@Entity>> {
+    - id : Long
+    - readerId : Long
+    - itemId : Long
+    - borrowDate : LocalDate
+    - dueDate : LocalDate
+    - returnDate : LocalDate
+    - status : String
+    - version : Long
+  }
+  class LibraryItemPO <<@Entity>> {
+    - id : Long
+    - barcode : String
+    - titleId : Long
+    - status : String
+    - version : Long
+  }
+}
+
+' ================= 关系 =================
+BorrowController ..> CirculationApplicationService : 依赖
+ReturnController ..> CirculationApplicationService : 依赖
+ReservationController ..> ReservationApplicationService : 依赖
+BorrowController ..> BorrowRequest
+BorrowController ..> BorrowResponse
+BorrowController ..> RequireRoleAspect : 被切面拦截
+GlobalExceptionHandler ..> ErrorBody
+
+CirculationApplicationService ..> CirculationService : 调用领域服务
+CirculationApplicationService ..> LoanRepository : 依赖接口
+CirculationApplicationService ..> LoanMapper
+ReservationApplicationService ..> ReservationRepository
+ReservationApplicationService ..> BookTitle
+
+CirculationService ..> BorrowCardRepository
+CirculationService ..> LibraryItemRepository
+CirculationService ..> BorrowPolicyRepository
+CirculationService ..> Loan
+FineCalculator ..> FineRuleRepository
+FineCalculator ..> FineRecord
+
+LoanRepository <|.. JpaLoanRepository
+LibraryItemRepository <|.. JpaLibraryItemRepository
+ReservationRepository <|.. JpaReservationRepository
+
+JpaLoanRepository ..> LoanPO : 映射
+JpaLibraryItemRepository ..> LibraryItemPO : 映射
+LoanMapper ..> LoanPO : PO <-> Entity
+
+Reader <|-- StudentReader
+Reader <|-- TeacherReader
+LibraryItem <|-- Book
+LibraryItem <|-- Magazine
+LibraryItem <|-- Thesis
+ReaderFactory ..> StudentReader : 创建
+ReaderFactory ..> TeacherReader : 创建
+LibraryItemFactory ..> Book : 创建
+LibraryItemFactory ..> Magazine : 创建
+LibraryItemFactory ..> Thesis : 创建
+
+Reader "1" -- "1" BorrowCard
+Reader "1" -- "*" Loan
+Reader "1" -- "*" Reservation
+BookTitle "1" -- "*" LibraryItem
+BookTitle "1" -- "*" Reservation
+LibraryItem "1" -- "*" Loan
+Loan "1" -- "*" FineRecord
+BorrowPolicy ..> BorrowPeriod
+FineRule ..> Money
+
+note as N1
+  Controller 只依赖 Application Service，
+  不直接依赖 Repository（NFR-001）
+end note
+
+note as N2
+  Repository 接口定义在领域层，
+  实现在基础设施层 —— 依赖倒置（DIP）
+end note
+
+note as N3
+  实体与 PO 分离：
+  Loan（领域） vs LoanPO（JPA）
+  避免持久化注解污染领域层
+end note
+
+@enduml

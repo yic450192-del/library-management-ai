@@ -1,0 +1,159 @@
+@startuml
+' 09a 分析类图（第一步）—— 指导书步骤 4
+' 不考虑界面技术与持久化，只考虑领域类（BCE：边界 / 控制 / 实体）
+' 渲染：java -jar plantuml.jar specs/09a-analysis-class-diagram.puml
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+' ===== 边界类 =====
+class BorrowUI <<boundary>> {
+  + inputCardNo(cardNo)
+  + inputBarcode(barcode)
+  + showReaderInfo(info)
+  + showBorrowResult(result)
+}
+
+class ReturnUI <<boundary>> {
+  + inputBarcode(barcode)
+  + showReturnResult(result)
+  + showFine(amount)
+}
+
+class ReserveUI <<boundary>> {
+  + selectTitle(titleId)
+  + submitReserve()
+  + showQueuePosition(pos)
+}
+
+' ===== 控制类 =====
+class BorrowHandler <<control>> {
+  + handleBorrow(cardNo, barcode) : Loan
+  - validateCard(cardNo)
+  - checkBorrowRule(reader)
+  - checkItemAvailable(barcode)
+  - createLoan(reader, item)
+}
+
+class ReturnHandler <<control>> {
+  + handleReturn(barcode) : Loan
+  - verifyOwned(barcode)
+  - judgeOverdue(loan)
+  - settleLoan(loan)
+}
+
+class ReserveHandler <<control>> {
+  + handleReserve(readerId, titleId) : Reservation
+  - checkDuplicate(readerId, titleId)
+  - enqueue(reservation)
+}
+
+' ===== 实体类 =====
+class Reader <<entity>> {
+  - readerId
+  - name
+  - department
+  - readerType
+  + hasOverdueLoan()
+  + activeLoanCount()
+}
+
+class BorrowCard <<entity>> {
+  - cardNo
+  - status
+  + isValid()
+}
+
+class BookTitle <<entity>> {
+  - titleId
+  - isbn
+  - title
+  + availableCopyCount()
+}
+
+class LibraryItem <<entity>> {
+  - barcode
+  - status
+  - itemType
+  + isAvailable()
+  + markOnLoan()
+  + markReturned()
+}
+
+class Loan <<entity>> {
+  - borrowDate
+  - dueDate
+  - returnDate
+  - status
+  + isOverdue(today)
+  + markReturned(date)
+}
+
+class Reservation <<entity>> {
+  - queuePosition
+  - status
+  - createdAt
+  + isExpired(today)
+}
+
+class FineRecord <<entity>> {
+  - amount
+  - overdueDays
+  - status
+}
+
+' ===== 规则类 =====
+class BorrowPolicy <<policy>> {
+  - readerType
+  - maxBooks
+  - loanPeriod
+  + checkQuota(activeCount)
+  + calculateDueDate(borrowDate)
+}
+
+class FineRule <<policy>> {
+  - itemType
+  - graceDays
+  - dailyRate
+  - maxAmount
+  + calculate(overdueDays)
+}
+
+' ===== 关系 =====
+BorrowUI ..> BorrowHandler : <<调用>>
+ReturnUI ..> ReturnHandler : <<调用>>
+ReserveUI ..> ReserveHandler : <<调用>>
+
+BorrowHandler ..> BorrowCard : 验证
+BorrowHandler ..> Reader : 取读者
+BorrowHandler ..> BorrowPolicy : 检查额度
+BorrowHandler ..> LibraryItem : 校验可借
+BorrowHandler ..> Loan : 创建
+
+ReturnHandler ..> LibraryItem : 校验本馆
+ReturnHandler ..> Loan : 结清
+ReturnHandler ..> FineRule : 取规则
+ReturnHandler ..> FineRecord : 创建
+
+ReserveHandler ..> BookTitle : 取题名
+ReserveHandler ..> Reservation : 创建并入队
+
+Reader "1" -- "1" BorrowCard
+Reader "1" -- "*" Loan
+Reader "1" -- "*" Reservation
+Reader "1" -- "*" FineRecord
+BookTitle "1" -- "*" LibraryItem
+BookTitle "1" -- "*" Reservation
+LibraryItem "1" -- "*" Loan
+Loan "1" -- "*" FineRecord
+
+BorrowPolicy ..> Reader : 按读者类型
+FineRule ..> LibraryItem : 按借出物类型
+
+note bottom of BorrowHandler
+  本图不含 Repository / DTO /
+  持久化对象 —— 那是第二步
+  设计类图的事
+end note
+
+@enduml

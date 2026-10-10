@@ -1,0 +1,112 @@
+@startuml
+' 10 顺序图：办理借书（UC-101） —— 指导书步骤 4
+' 渲染：java -jar plantuml.jar specs/10-sequence-borrow-book.puml
+
+autonumber
+skinparam maxMessageSize 120
+
+actor    "图书管理员"            as Librarian
+participant "BorrowController"   as Ctrl    <<presentation>>
+participant "RequireRoleAspect"  as Aspect  <<presentation>>
+participant "CirculationApplicationService" as AppSvc <<application>>
+participant "CirculationService" as Domain  <<domain>>
+participant "BorrowCardRepository" as CardRepo <<domain.repository>>
+participant "BorrowPolicyRepository" as PolicyRepo <<domain.repository>>
+participant "LibraryItemRepository" as ItemRepo <<domain.repository>>
+participant "LoanRepository"     as LoanRepo <<domain.repository>>
+
+== 1. 鉴权（BR-013：借书只能由图书管理员发起） ==
+
+Librarian -> Ctrl : POST /api/loans\n{cardNo, barcode}\nX-Operator-Role=LIBRARIAN
+Ctrl -> Aspect : 校验操作人角色
+Aspect -->> Ctrl : 通过
+
+== 2. 进入应用服务（事务边界） ==
+
+Ctrl -> AppSvc : borrow(request, operator)
+activate AppSvc
+AppSvc -> Domain : borrow(cardNo, barcode, librarianId, today)
+
+== 3. 验证借阅证（UC-901） ==
+
+activate Domain
+Domain -> CardRepo : findByCardNo(cardNo)
+activate CardRepo
+CardRepo -->> Domain : BorrowCard
+deactivate CardRepo
+
+alt 借阅证不存在
+    Domain -->> AppSvc : throw CardNotFoundException
+    AppSvc -->> Ctrl : 404 借阅证不存在
+    Ctrl -->> Librarian : 提示"借阅证不存在"
+else 借阅证状态非 ACTIVE（BR-002）
+    Domain -->> AppSvc : throw CardNotActiveException
+    AppSvc -->> Ctrl : 409 借阅证已挂起/注销
+    Ctrl -->> Librarian : 提示当前状态
+else 借阅证有效
+    Domain -> Domain : card.isValid() == true
+
+    == 4. 检查借阅规则（UC-902） ==
+    Domain -> PolicyRepo : findByReaderType(reader.readerType)
+    activate PolicyRepo
+    PolicyRepo -->> Domain : BorrowPolicy{maxBooks, loanPeriod}
+    deactivate PolicyRepo
+
+    Domain -> LoanRepo : findActiveByReaderId(readerId)
+    activate LoanRepo
+    LoanRepo -->> Domain : List<Loan>（BORROWED / OVERDUE）
+    deactivate LoanRepo
+
+    alt 在借数量 >= maxBooks（BR-004）
+        Domain -->> AppSvc : throw QuotaExceededException
+        AppSvc -->> Ctrl : 409 已达借阅上限 N 册
+        Ctrl -->> Librarian : 提示"已达借阅上限"
+    else 存在超期未还图书（BR-005）
+        Domain -->> AppSvc : throw OverdueLoanExistsException
+        AppSvc -->> Ctrl : 409 存在超期未还图书
+        Ctrl -->> Librarian : 列出超期书目
+    else 通过
+        Domain -->> AppSvc : 显示借阅者信息（姓名、系别、在借数、可用额度）
+        AppSvc -->> Librarian : 显示读者信息
+
+        == 5. 校验馆藏副本（BR-007 / BR-008） ==
+        Librarian -> Ctrl : 输入馆藏条码
+        Ctrl -> AppSvc : borrow(request, operator)
+        AppSvc -> Domain : borrow(cardNo, barcode, librarianId, today)
+        Domain -> ItemRepo : findByBarcode(barcode)
+        activate ItemRepo
+        ItemRepo -->> Domain : LibraryItem
+        deactivate ItemRepo
+
+        alt 非本馆藏书
+            Domain -->> AppSvc : throw ItemNotOwnedException
+            AppSvc -->> Ctrl : 404 非本馆藏书
+            Ctrl -->> Librarian : 提示"非本馆藏书"
+        else 副本已借出 / 非在馆状态
+            Domain -->> AppSvc : throw ItemNotAvailableException
+            AppSvc -->> Ctrl : 409 该副本当前不可借
+            Ctrl -->> Librarian : 提示状态与应还日期
+        else 副本可借
+            == 6. 创建借阅记录（BR-006） ==
+            Domain -> Domain : dueDate = policy.calculateDueDate(today)
+            Domain -> Domain : new Loan(reader, item, today, dueDate)
+            Domain -> Domain : item.markOnLoan()
+            Domain -> LoanRepo : save(loan)
+            activate LoanRepo
+            LoanRepo -->> Domain : Loan（已持久化，乐观锁 @Version）
+            deactivate LoanRepo
+            Domain -->> AppSvc : Loan
+        end
+    end
+end
+
+deactivate Domain
+
+== 7. 装配响应 ==
+
+AppSvc -> AppSvc : loanMapper.toResponse(loan)
+AppSvc -->> Ctrl : BorrowResponse{loanId, bookTitle, dueDate}
+deactivate AppSvc
+Ctrl -->> Librarian : 200 借书成功，应还日期 XXXX-XX-XX
+
+@enduml

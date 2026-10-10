@@ -1,0 +1,296 @@
+@startuml
+' 06 领域类图 —— 指导书步骤 2
+' 红线：不出现 Controller / Repository / DTO
+' 渲染：java -jar plantuml.jar specs/06-domain-class-diagram.puml
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+' ================= 账户与读者 =================
+
+abstract class Reader <<Entity>> {
+  - readerId : Long
+  - name : String
+  - department : String
+  - readerType : ReaderType
+  - status : AccountStatus
+  --
+  + isAllowedToBorrow() : boolean
+  + activeLoanCount() : int
+  + hasOverdueLoan() : boolean
+}
+
+class StudentReader <<Entity>> {
+  - studentNo : String
+  - studentCategory : StudentCategory
+}
+
+class TeacherReader <<Entity>> {
+  - staffNo : String
+  - title : String
+}
+
+class BorrowCard <<Entity>> {
+  - cardId : Long
+  - cardNo : String
+  - ownerName : String
+  - department : String
+  - status : CardStatus
+  - issuedAt : LocalDate
+  --
+  + isValid() : boolean
+  + suspend() : void
+  + cancel() : void
+}
+
+class Librarian <<Entity>> {
+  - librarianId : Long
+  - name : String
+  - employeeNo : String
+  - status : AccountStatus
+  --
+  + borrowOnBehalfOf() : Loan
+  + returnOnBehalfOf() : Loan
+}
+
+class SystemAdmin <<Entity>> {
+  - adminId : Long
+  - name : String
+  - employeeNo : String
+}
+
+' ================= 馆藏与题名 =================
+
+class BookTitle <<Entity>> {
+  - titleId : Long
+  - isbn : String
+  - title : String
+  - authors : String
+  - publisher : String
+  - publishedYear : int
+  - itemType : ItemType
+  --
+  + availableCopyCount() : int
+}
+
+abstract class LibraryItem <<Entity>> {
+  - itemId : Long
+  - barcode : String
+  - status : ItemStatus
+  - location : String
+  - acquiredAt : LocalDate
+  --
+  + isAvailable() : boolean
+  + markOnLoan() : void
+  + markReturned() : void
+  + markOverdue() : void
+}
+
+class Book <<Entity>> {
+  - language : Language
+  - edition : String
+  - pages : int
+}
+
+class Magazine <<Entity>> {
+  - language : Language
+  - issue : String
+  - volume : String
+}
+
+class Thesis <<Entity>> {
+  - degree : String
+  - awardingUnit : String
+}
+
+' ================= 流通 =================
+
+class Loan <<Entity>> {
+  - loanId : Long
+  - borrowDate : LocalDate
+  - dueDate : LocalDate
+  - returnDate : LocalDate
+  - status : LoanStatus
+  - renewCount : int
+  --
+  + isOverdue(today) : boolean
+  + overdueDays(today) : int
+  + markReturned(date) : void
+  + renew(days) : void
+}
+
+class Reservation <<Entity>> {
+  - reservationId : Long
+  - createdAt : LocalDateTime
+  - queuePosition : int
+  - status : ReservationStatus
+  - expireAt : LocalDateTime
+  --
+  + isExpired(today) : boolean
+  + ready() : void
+  + expire() : void
+  + fulfill() : void
+}
+
+class FineRecord <<Entity>> {
+  - fineId : Long
+  - amount : Money
+  - overdueDays : int
+  - status : FineStatus
+  - createdAt : LocalDate
+}
+
+' ================= 规则与策略 =================
+
+class BorrowPolicy <<Policy>> {
+  - policyId : Long
+  - readerType : ReaderType
+  - maxBooks : int
+  - loanPeriod : BorrowPeriod
+  - maxRenewTimes : int
+  - renewDays : int
+  --
+  + checkQuota(activeCount) : boolean
+  + calculateDueDate(borrowDate) : LocalDate
+  + canRenew(renewCount) : boolean
+}
+
+class FineRule <<Policy>> {
+  - ruleId : Long
+  - itemType : ItemType
+  - graceDays : int
+  - dailyRate : Money
+  - maxAmount : Money
+  --
+  + calculate(overdueDays) : Money
+}
+
+class CirculationService <<Domain Service>> {
+  --
+  + borrow(cardNo, barcode, librarianId, today) : Loan
+  + returnItem(barcode, librarianId, today) : Loan
+}
+
+class FineCalculator <<Domain Service>> {
+  --
+  + calculateAndCreate(loan, today) : FineRecord
+}
+
+' ================= 值对象 =================
+
+class Money <<Value Object>> {
+  - amount : BigDecimal
+  - currency : String
+}
+
+class BorrowPeriod <<Value Object>> {
+  - days : int
+}
+
+enum ReaderType <<Enum>> {
+  JUNIOR_COLLEGE
+  UNDERGRADUATE
+  POSTGRADUATE
+  DOCTORAL
+  TEACHER
+}
+
+enum ItemType <<Enum>> {
+  CN_BOOK
+  FOREIGN_BOOK
+  CN_MAGAZINE
+  FOREIGN_MAGAZINE
+  THESIS
+}
+
+enum LoanStatus <<Enum>> {
+  BORROWED
+  RETURNED
+  OVERDUE
+  LOST
+}
+
+enum CardStatus <<Enum>> {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum ItemStatus <<Enum>> {
+  IN_LIBRARY
+  ON_LOAN
+  OVERDUE
+  LOST
+}
+
+enum ReservationStatus <<Enum>> {
+  WAITING
+  READY
+  FULFILLED
+  EXPIRED
+  CANCELLED
+}
+
+' ================= 关系 =================
+
+Reader <|-- StudentReader
+Reader <|-- TeacherReader
+
+LibraryItem <|-- Book
+LibraryItem <|-- Magazine
+LibraryItem <|-- Thesis
+
+Reader "1" *-- "1" BorrowCard : 持有 >
+Reader "1" -- "*" Loan : 借阅记录 >
+Reader "1" -- "*" Reservation : 预约 >
+Reader "1" -- "*" FineRecord : 罚款 >
+
+BookTitle "1" *-- "*" LibraryItem : 馆藏副本 >
+BookTitle "1" -- "*" Reservation : 被预约 >
+
+LibraryItem "1" -- "*" Loan : 借阅记录 >
+Librarian "1" -- "*" Loan : 经办 >
+
+Loan "1" -- "*" FineRecord : 产生 >
+
+BorrowPolicy ..> ReaderType : 按读者类型配置 >
+FineRule ..> ItemType : 按借出物类型配置 >
+
+CirculationService ..> BorrowCard : 验证 >
+CirculationService ..> BorrowPolicy : 检查额度 >
+CirculationService ..> LibraryItem : 校验可借 >
+CirculationService ..> Loan : 创建 >
+CirculationService ..> FineCalculator : 超期时调用 >
+
+FineCalculator ..> FineRule : 取规则 >
+
+Loan ..> LoanStatus
+BorrowCard ..> CardStatus
+LibraryItem ..> ItemStatus
+Reservation ..> ReservationStatus
+BorrowPolicy ..> BorrowPeriod
+FineRule ..> Money
+FineRecord ..> Money
+Reader ..> ReaderType
+BookTitle ..> ItemType
+
+note right of BorrowPolicy
+  指导书需求 4：
+  不同读者类型的
+  借阅数量与期限不同
+  —— Strategy 模式
+end note
+
+note right of FineRule
+  指导书需求 7：
+  不同借出物的
+  超期规定与罚金不同
+  —— Strategy 模式
+end note
+
+note bottom of LibraryItem
+  指导书需求 5：
+  中外文图书 / 中外文杂志 / 论文
+end note
+
+@enduml

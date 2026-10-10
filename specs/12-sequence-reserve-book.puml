@@ -1,0 +1,90 @@
+@startuml
+' 12 顺序图：预约图书（UC-003） —— 指导书步骤 4
+' 渲染：java -jar plantuml.jar specs/12-sequence-reserve-book.puml
+
+autonumber
+skinparam maxMessageSize 120
+
+actor    "读者"                  as Reader
+participant "ReservationController" as Ctrl      <<presentation>>
+participant "RequireRoleAspect"  as Aspect    <<presentation>>
+participant "ReservationApplicationService" as AppSvc <<application>>
+participant "BookTitleRepository" as TitleRepo <<domain.repository>>
+participant "ReservationRepository" as ResRepo <<domain.repository>>
+participant "Reservation"        as Res       <<domain entity>>
+
+== 1. 读者检索并选择题名（UC-002） ==
+
+Reader -> Ctrl : GET /api/titles?keyword=...
+Ctrl -->> Reader : 题名列表 + 可借副本数
+Reader -> Ctrl : POST /api/reservations\n{titleId}\nX-Operator-Role=READER
+
+== 2. 鉴权（读者本人操作） ==
+
+Ctrl -> Aspect : 校验角色为 READER
+Aspect -->> Ctrl : 通过
+
+== 3. 进入应用服务（事务边界） ==
+
+Ctrl -> AppSvc : reserve(request, operator)
+activate AppSvc
+
+== 4. 取题名并判断是否有可借副本 ==
+
+AppSvc -> TitleRepo : findById(titleId)
+activate TitleRepo
+TitleRepo -->> AppSvc : BookTitle
+deactivate TitleRepo
+
+AppSvc -> AppSvc : title.availableCopyCount()
+
+alt 存在可借副本
+    AppSvc -->> Ctrl : 提示"当前有可借副本，可直接借阅"
+    Ctrl -->> Reader : 200 建议直接办理借阅，不创建预约
+else 无可借副本
+    == 5. 校验重复预约（BR-011） ==
+    AppSvc -> ResRepo : existsActiveByReaderAndTitle(readerId, titleId)
+    activate ResRepo
+    ResRepo -->> AppSvc : boolean
+    deactivate ResRepo
+
+    alt 已存在有效预约
+        AppSvc -->> Ctrl : 409 您已预约该题名
+        Ctrl -->> Reader : 提示"您已预约该题名，排队位次 N"
+    else 无重复预约
+        == 6. 入队（BR-010） ==
+        AppSvc -> ResRepo : countByTitleId(titleId)
+        activate ResRepo
+        ResRepo -->> AppSvc : 当前排队人数 M
+        deactivate ResRepo
+
+        AppSvc -> Res : new Reservation(reader, title, queuePosition = M + 1,\nstatus = WAITING, expireAt = null)
+        activate Res
+        Res -->> AppSvc : Reservation
+        deactivate Res
+
+        AppSvc -> ResRepo : save(reservation)
+        activate ResRepo
+        ResRepo -->> AppSvc : Reservation（已持久化）
+        deactivate ResRepo
+
+        AppSvc -->> Ctrl : ReservationResponse{reservationId, queuePosition}
+        deactivate AppSvc
+        Ctrl -->> Reader : 201 预约成功，排队位次 N
+    end
+end
+
+== 7. 后续：副本归还触发队首通知（BR-012） ==
+
+note over AppSvc, Res
+  当有副本归还且该读者位于队首时：
+  reservation.ready()  → status = READY
+  expireAt = now + 3 天
+  通知读者取书
+
+  若 3 天内未取：
+  reservation.expire() → status = EXPIRED
+  队列顺延并通知下一位
+end note
+
+@enduml

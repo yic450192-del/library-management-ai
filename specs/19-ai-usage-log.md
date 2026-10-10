@@ -1,0 +1,41 @@
+# 19 · AI 使用记录 AI Usage Log
+
+> 课程要求：每次使用 Agent 生成 specs、UML、代码或测试，都必须记录。
+> 本表由 Agent（WorkBuddy）在每次操作后追加，Violet 人工复核。
+> 过程全景见 `docs/实验过程日志.md`。
+
+## 使用约定
+
+| 项 | 约定 |
+|---|---|
+| Agent | WorkBuddy（CodeBuddy），直接读写工作区文件、执行命令、git 提交 |
+| 工作流 | Plan → 人工 Confirm → Implement → 人工 Review（git diff）→ Commit |
+| 红线 | 不得把 API Key 写入仓库；不得让 Agent 自行修改已冻结的 specs；不得让 Agent 修改 specs 来适配代码 |
+
+## 记录表
+
+| # | 日期 | 阶段 | 任务 | AI 做了什么 | 产出文件 | 人工审查 | 结论 |
+|---|---|---|---|---|---|---|---|
+| 1 | 2026-10-10 | 准备 | 通读材料、核实工具链 | 阅读 3 份材料，实测 JDK/MySQL/Git/Graphviz 状态 | `实验一实施路线.md` | 待审 | 采纳 |
+| 2 | 2026-10-10 | 准备 | 范围决策 | 指出 Word 指导书与 AI 手册在"顺序图归属"上的冲突并给出处理方案 | — | 已确认 | 按 Word 指导书 5 步执行 |
+| 3 | 2026-10-10 | 步骤 0 | 建仓、写 Brief 与假设 | 起草项目背景、7 条功能性需求、暂不实现清单、7 组待确认假设 | `.gitignore`、`README.md`、`specs/00`、`specs/01` | **待确认 01 中的取值** | 草案 |
+| 4 | 2026-10-10 | 步骤 0 | 需求规格 | 把指导书 7 条需求展开为 FR-001~017 / BR-001~015 / NFR-001~006，每条带验收标准 | `specs/02-requirements.md` | 待审 | 草案 |
+| 5 | 2026-10-10 | 步骤 1 | 用例模型 | 识别 5 类参与者与 17 个用例；详写 5 个核心用例的基本/备选/异常三流 | `specs/03-use-cases.md`、`specs/04-use-case-model.puml` | 待审 | 草案 |
+| 6 | 2026-10-10 | 步骤 2 | 领域模型 | 识别 14 个实体、7 个值对象、2 个策略、2 个领域服务 | `specs/05-domain-model.md`、`specs/06-domain-class-diagram.puml` | 待审 | 草案 |
+| 7 | 2026-10-10 | 步骤 3 | 架构设计 | 四层 + MVC、权限矩阵、异常映射、事务边界、8 个设计模式 | `specs/07-architecture.md`、`specs/08-package-diagram.puml` | 待审 | 草案 |
+| 8 | 2026-10-10 | 步骤 4 | 设计模型 | 两步法：分析类图（BCE）→ 设计类图；3 张顺序图 | `specs/09`、`09a`、`09b`、`10`、`11`、`12` | 待审 | 草案 |
+| 9 | 2026-10-10 | 步骤 5 | 数据库设计 | 领域类 → 11 张表；单表继承策略；索引与 CHECK 约束 | `specs/13-database-design.md`、`db/schema.sql` | 待审 | 草案 |
+| 10 | 2026-10-10 | 纠正 | 补日志与 Java 骨架 | 建过程日志与 AI 使用记录；落领域层 Java 并 javac 编译验证 | `docs/实验过程日志.md`、本文件、`src/main/java/...` | 待审 | 已编译通过 |
+| 11 | 2026-10-10 | 步骤 4 | 领域层 Java 骨架 | 写 36 个 .java：实体 / 值对象 / 枚举 / 策略 / Repository 接口 / CirculationService；JDK 17 javac 编译 0 错误 | `src/main/java/com/example/library/domain/**` | 待审 | 草案 |
+| 12 | 2026-10-10 | 修订 | 文档与代码对齐 | 架构文档的异常设计改为与 ErrorCode 枚举一致 | `specs/07-architecture.md` | 待审 | 已采纳 |
+
+## 人工审查提示
+
+每次 Agent 操作后建议执行：
+
+```bash
+git status          # 看改了哪些文件
+git diff            # 看具体改了什么
+```
+
+确认无误再 `git add` + `git commit`。
