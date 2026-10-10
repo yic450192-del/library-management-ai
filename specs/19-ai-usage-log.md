@@ -28,6 +28,9 @@
 | 10 | 2026-10-10 | 纠正 | 补日志与 Java 骨架 | 建过程日志与 AI 使用记录；落领域层 Java 并 javac 编译验证 | `docs/实验过程日志.md`、本文件、`src/main/java/...` | 待审 | 已编译通过 |
 | 11 | 2026-10-10 | 步骤 4 | 领域层 Java 骨架 | 写 36 个 .java：实体 / 值对象 / 枚举 / 策略 / Repository 接口 / CirculationService；JDK 17 javac 编译 0 错误 | `src/main/java/com/example/library/domain/**` | 待审 | 草案 |
 | 12 | 2026-10-10 | 修订 | 文档与代码对齐 | 架构文档的异常设计改为与 ErrorCode 枚举一致 | `specs/07-architecture.md` | 待审 | 已采纳 |
+| 13 | 2026-10-10 | 步骤 0 | 确认假设取值 | Violet 确认 A–G 默认取值；补充 H 节取值依据与可配置性 | `specs/01-assumptions.md` | **已确认** | 采纳 |
+| 14 | 2026-10-10 | 工程 | 建 GitHub 仓库并推送 | `gh repo create --private`；master 改 main；推送 2 个 commit | https://github.com/yic450192-del/library-management-ai | 待审 | 已完成 |
+| 15 | 2026-10-10 | 步骤 5 | 数据库验证脚本 | 写 8 组验证（含 4 条负向验证），改由人工在 Navicat/命令行执行 | `db/verify.sql` | 待执行 | 待人工跑 |
 
 ## 人工审查提示
 
