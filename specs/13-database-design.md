@@ -222,19 +222,42 @@
 | `reservations` 是否能支持排队？ | 是，`queue_position` + `created_at` 复合索引 |
 | `fine_rules` 是否能支持不同借出物类型？ | 是，`item_type` 唯一键，五种类型各一条 |
 | `borrow_policies` 是否能支持不同读者类型？ | 是，`reader_type` 唯一键，五种类型各一条 |
-| 是否存在必要外键？ | 是，7 处外键：`borrow_cards→readers`、`library_items→book_titles`、`loans→readers/items/librarians`、`reservations→readers/titles`、`fine_records→loans/readers` |
+| 是否存在必要外键？ | 是，**9 处外键**：`borrow_cards→readers`；`library_items→book_titles`；`loans→readers`、`loans→library_items`、`loans→librarians`；`reservations→readers`、`reservations→book_titles`；`fine_records→loans`、`fine_records→readers` |
 
-## 6. 验证方式
+> 修正记录：初稿误写为"7 处"，2026-10-10 实跑 `information_schema.KEY_COLUMN_USAGE` 查询后确认为 **9 处**，已更正。
+
+## 6. 验证方式与实测结果
+
+### 6.1 执行
 
 ```bash
-"C:/Program Files/MySQL/MySQL Server 8.0/bin/mysql.exe" -u root -p < db/schema.sql
+# 注意：Windows 上 mysql 客户端默认字符集为 gbk，必须显式指定 utf8mb4，
+# 否则含中文的 DDL/DML 会报 ERROR 3854 (Cannot convert string ... from gbk to utf8mb3)
+"C:/Program Files/MySQL/MySQL Server 8.0/bin/mysql.exe" -u root -p --default-character-set=utf8mb4 < db/schema.sql
+"C:/Program Files/MySQL/MySQL Server 8.0/bin/mysql.exe" -u root -p --default-character-set=utf8mb4 --table < db/verify.sql
 ```
 
-建库 `library_ai`，字符集 `utf8mb4`。建表后可用下列语句验证约束确实生效：
+### 6.2 实测记录（2026-10-10，MySQL 8.0.45，Agent 实跑）
 
-```sql
-USE library_ai;
-SHOW TABLES;                                  -- 应返回 11 张表
-SHOW INDEX FROM borrow_cards WHERE Non_unique = 0;   -- 应看到 uk_card_no
-SHOW INDEX FROM library_items WHERE Non_unique = 0;  -- 应看到 uk_barcode
-```
+| 验证项 | 预期 | 实测 |
+|---|---|---|
+| 建库建表 | 11 张表 | ✅ 11 张，全部建立 |
+| 表注释 | 中文可读 | ✅ 正常显示 |
+| 唯一键 | `uk_card_no`、`uk_barcode`、`uk_reader_type`、`uk_item_type`、`uk_isbn`、`uk_reader_title_active` | ✅ 全部存在 |
+| 外键 | 9 处 | ✅ 9 处全部建立 |
+| 初始规则数据 | 5 条借阅规则 + 5 条罚款规则 | ✅ 与 `01-assumptions.md` 一致 |
+| 正向主流程 | 张三借《三体》，应还日 = 借出日 + 30 天 | ✅ 借出 2026-10-10 → 应还 **2026-11-09**，副本 `ON_LOAN`，借阅 `BORROWED` |
+| 预约排队 | 位次 1，状态 WAITING | ✅ 符合 BR-010 |
+| 负向 7.1 证号重复 | 拒绝 | ✅ `ERROR 1062 ... uk_card_no` |
+| 负向 7.2 条码重复 | 拒绝 | ✅ `ERROR 1062 ... uk_barcode` |
+| 负向 7.3 教师填学号 | 拒绝 | ✅ `ERROR 3819 ... ck_readers_student is violated` |
+| 负向 7.4 已还无归还日期 | 拒绝 | ✅ `ERROR 3819 ... ck_loan_return is violated` |
+
+**结论**：数据库设计已在本机 MySQL 8.0.45 上验证通过，11 张表、9 处外键、
+6 组唯一约束、4 条 CHECK 约束均真实生效，非纸面设计。
+
+### 6.3 遗留
+
+- 初始规则数据（借阅额度、罚金）为 `01-assumptions.md` 中确认的默认取值，可随时 UPDATE 调整。
+- `reservations.uk_reader_title_active` 用 `(reader_id, title_id, status)` 复合唯一键实现 BR-011，
+  同一读者对同一题名在**不同状态**下可有多条历史记录（如取消后再预约），符合预期。
