@@ -1,0 +1,59 @@
+@startuml
+' 报告用图 2：借书链路关键类图（窄版竖排，专为 A4 排版）
+' 取自 specs/09b-design-class-diagram.puml 中 UC-101 借业主链，省略与借书无关的管理类与实现类
+' 渲染：java -DGRAPHVIZ_DOT=... -jar tools/plantuml.jar -o <abs> docs/report-figures/src/02-borrow-key-classes.puml
+
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam ArrowColor #4A5568
+skinparam nodesep 18
+skinparam ranksep 26
+
+class BorrowController <<RestController>> {
+  + borrow(req, op)
+}
+
+class CirculationApplicationService <<Service>> {
+  + borrow(cardNo, barcode, opId)
+}
+
+class CirculationService <<DomainService>> {
+  + borrow(cardNo, barcode, opId)
+}
+
+class BorrowCard {
+  + isActive()
+}
+class BorrowPolicy <<Strategy>> {
+  + maxBooks
+  + loanPeriod
+}
+class LibraryItem {
+  + isAvailableForLoan()
+}
+class Loan {
+  + isOverdue(today)
+}
+
+interface LoanRepository <<interface>>
+interface LibraryItemRepository <<interface>>
+interface BorrowPolicyRepository <<interface>>
+
+BorrowController --> CirculationApplicationService
+CirculationApplicationService --> CirculationService
+CirculationService --> BorrowCard : "① 验证证"
+CirculationService --> BorrowPolicy : "② 额度期限"
+CirculationService --> Loan : "③ 查超期"
+CirculationService --> LibraryItem : "④ 校验副本"
+CirculationService --> LoanRepository
+CirculationService --> LibraryItemRepository
+CirculationService --> BorrowPolicyRepository
+
+note right of CirculationService
+  校验顺序固定：证 → 读者 → 额度 → 超期 → 副本，
+  全部通过后才写数据。
+end note
+
+@enduml

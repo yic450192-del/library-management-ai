@@ -1,0 +1,60 @@
+@startuml
+' 报告用图 4：借书顺序图（窄版 5 条生命线，专为 A4 排版）
+' 取自 specs/10-sequence-borrow-book.puml，把 4 个 Repository 合并为"领域对象与仓储"一条生命线
+' 完整版（9 条生命线，含全部分支）见 specs/10-sequence-borrow-book.puml 与 docs/uml/10-sequence-borrow-book.png
+' 渲染：java -DGRAPHVIZ_DOT=... -jar tools/plantuml.jar -o <abs> docs/report-figures/src/04-sequence-borrow.puml
+
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+skinparam ArrowColor #4A5568
+skinparam ParticipantPadding 12
+skinparam BoxPadding 8
+
+actor "图书管理员" as Librarian
+participant "BorrowController" as Ctrl
+participant "Circulation\nApplicationService" as AppSvc
+participant "Circulation\nService" as Domain
+participant "领域对象\n与仓储" as Repo
+
+Librarian -> Ctrl : 刷借阅证 + 扫条码
+Ctrl -> Ctrl : 校验角色 = LIBRARIAN
+Ctrl -> AppSvc : borrow(cardNo, barcode, operatorId)
+AppSvc -> Domain : borrow(...)
+
+group ① 验证借阅证（UC-901）
+  Domain -> Repo : findByCardNo
+  Repo --> Domain : BorrowCard
+  alt 证不存在 / 状态非 ACTIVE / 已过期
+    Domain --> AppSvc : BusinessException(CARD_*)
+    AppSvc --> Ctrl : 异常冒泡
+    Ctrl --> Librarian : 400 / 403 + 提示
+  end
+end
+
+group ② 额度与 ③ 超期（UC-902）
+  Domain -> Repo : findBorrowPolicy(readerType)
+  Domain -> Repo : countActiveLoans / findOverdueLoans
+  alt 超过额度 或 存在超期
+    Domain --> AppSvc : BusinessException(QUOTA_* / OVERDUE_*)
+  end
+end
+
+group ④ 校验副本
+  Domain -> Repo : findByBarcode
+  alt 副本状态非 AVAILABLE
+    Domain --> AppSvc : BusinessException(ITEM_NOT_AVAILABLE)
+  end
+end
+
+group ⑤ 写入
+  Domain -> Domain : dueDate = borrowDate + loanPeriod
+  Domain -> Repo : save(Loan)
+  Domain -> Repo : item.status = ON_LOAN
+  Domain --> AppSvc : Loan
+end
+
+AppSvc --> Ctrl : BorrowResponse(dueDate)
+Ctrl --> Librarian : 201 + 应还日期
+
+@enduml

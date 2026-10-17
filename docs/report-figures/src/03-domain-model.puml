@@ -1,0 +1,96 @@
+@startuml
+' 报告用图 3：领域模型类图（窄版，专为 A4 排版）
+' 取自 specs/06-domain-class-diagram.puml，省略与借还主链无关的属性细节，保留继承与聚合关系
+' 渲染：java -DGRAPHVIZ_DOT=... -jar tools/plantuml.jar -o <abs> docs/report-figures/src/03-domain-model.puml
+
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 16
+skinparam ranksep 24
+skinparam ArrowColor #4A5568
+
+package "读者" #E6F1FB {
+  abstract class Reader {
+    # readerType : ReaderType
+    # status : AccountStatus
+    + activeLoanCount()
+    + hasOverdueLoan()
+  }
+  class StudentReader {
+    + studentNo
+    + category
+  }
+  class TeacherReader {
+    + staffNo
+    + title
+  }
+  class BorrowCard {
+    + cardNo
+    + status : CardStatus
+    + isActive()
+  }
+}
+
+package "馆藏" #E1F5EE {
+  class BookTitle {
+    + isbn
+    + title
+    + authors
+    + itemType : ItemType
+  }
+  abstract class LibraryItem {
+    + barcode
+    + status : ItemStatus
+    + isAvailableForLoan()
+  }
+  class Book
+  class Magazine
+  class Thesis
+}
+
+package "流通" #EEEDFE {
+  class Loan {
+    + borrowDate
+    + dueDate
+    + isOverdue(today)
+  }
+  class Reservation {
+    + queuePosition
+    + expireAt
+  }
+  class FineRecord {
+    + overdueDays
+    + amount : Money
+  }
+}
+
+package "规则（Strategy）" #FAECE7 {
+  class BorrowPolicy {
+    + maxBooks
+    + loanPeriod
+  }
+  class FineRule {
+    + graceDays
+    + dailyRate
+    + maxAmount
+  }
+}
+
+Reader <|-- StudentReader
+Reader <|-- TeacherReader
+Reader "1" -- "1" BorrowCard
+LibraryItem <|-- Book
+LibraryItem <|-- Magazine
+LibraryItem <|-- Thesis
+BookTitle "1" -- "n" LibraryItem
+Reader "1" -- "n" Loan
+LibraryItem "1" -- "n" Loan
+Loan "0..1" -- "1" FineRecord
+Reader "1" -- "n" Reservation
+BookTitle "1" -- "n" Reservation
+BorrowPolicy ..> Reader : "按类型取规则"
+FineRule ..> Loan : "按借出物类型计费"
+
+@enduml

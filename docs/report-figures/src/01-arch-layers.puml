@@ -1,0 +1,31 @@
+@startuml
+' 报告用图 1：四层架构与模块依赖（窄版竖排，专为 A4 排版）
+' 与 specs/07-architecture.md、specs/08-package-diagram.puml 一致，仅压缩宽度以便在 A4 宽度下可读
+' 渲染：java -DGRAPHVIZ_DOT=... -jar tools/plantuml.jar -o <abs> docs/report-figures/src/01-arch-layers.puml
+
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam ArrowColor #4A5568
+skinparam ArrowThickness 1.3
+skinparam nodesep 15
+skinparam ranksep 28
+
+rectangle "表现层 presentation\n5 个 Controller · GlobalExceptionHandler · RequireRoleAspect" as P #E6F1FB
+rectangle "应用服务层 application\n5 个 ApplicationService（事务边界设在此层）" as A #EEEDFE
+rectangle "领域层 domain（零框架依赖，可用纯 javac 编译）\n实体与值对象 · CirculationService · BorrowPolicy / FineRule\n7 个 Repository 接口 · ErrorCode" as D #E1F5EE
+rectangle "基础设施层 infrastructure\nJPA 持久化对象（PO）· Repository 实现 · Mapper" as I #FAECE7
+rectangle "MySQL 8.0 数据库（11 张表）" as DB #F1EFE8
+
+P --> A : "调用（DTO）"
+A --> D : "编排用例"
+I -up.> D : "实现接口（DIP）"
+I --> DB : "JPA"
+
+note right of D
+  红线：Controller 不得直接依赖 Repository；
+  依赖只能由外向内。
+end note
+
+@enduml
